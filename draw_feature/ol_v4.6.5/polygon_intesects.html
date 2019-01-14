@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+		<title>Polygon Intersects</title>
+		<link rel="stylesheet" href="https://openlayers.org/en/v4.6.5/css/ol.css" type="text/css">
+		<!-- The line below is only needed for old environments like Internet Explorer and Android 4.x -->
+		<script src="https://cdn.polyfill.io/v2/polyfill.min.js?features=requestAnimationFrame,Element.prototype.classList,URL"></script>
+		<script src="https://openlayers.org/en/v4.6.5/build/ol.js"></script>
+		<script src="../../js/turf/turf.min.js"></script>
+		<script src="../../js/jquery/jquery.min.js"></script>
+		<link href="../../js/toastr/toastr.min.css" rel="stylesheet">
+		<script src="../../js/toastr/toastr.min.js"></script>
+	</head>
+
+	<body>
+		<form class="form-inline">
+			<label>Geometry type &nbsp;</label>
+			<select id="type">
+				<option value="Polygon">Polygon</option>
+				<option value="None">None</option>
+			</select>
+		</form>
+		<span>In this page, we'll evaluate whether the polygon intersects.</span>
+		<div id="map" class="map"></div>
+		<script>
+			function isPolygonIntersects(feature) {
+				// Get the polygon (in my case there is only one, but u can put the'led' as parameter)
+				led = feature;
+				coords = feature.getGeometry().getCoordinates()[0];
+				//convert to lines
+				var points = [];
+				var line = [];
+				for(i in coords) {
+					points.push(ol.proj.transform(coords[i], 'EPSG:3857', 'EPSG:4326'));
+					if(i > 0) {
+						// create an array with the 2 last points 
+						line.push(turf.lineString([ol.proj.transform(coords[i - 1], 'EPSG:3857', 'EPSG:4326'), ol.proj.transform(coords[i], 'EPSG:3857', 'EPSG:4326')]));
+					}
+				}
+
+				// Check every line against every line
+				for(var i = 0; i < line.length; i++) {
+					for(var j = 0; j < line.length; j++) {
+						/*
+						 * / the lines must be differents and not adjacents.
+						 * // The end or start point of an adjacent line will beintersect,
+						 * // and adjacent lines never intersect in other point than the ends.
+						 */
+						var intersects = turf.lineIntersect(line[i], line[j]);
+						if(intersects.features.length == 0) {
+							continue;
+						} else {
+							var cnt = 0;
+							for(p in points) {
+								for(f in intersects.features) {
+									if(cmp(intersects.features[f].geometry.coordinates, points[p])) cnt++;
+								}
+							}
+							if(cnt == 0) {
+								return false;
+							}
+						}
+					}
+				}
+				return true;
+			}
+
+			cmp = function(x, y) {
+				// If both x and y are null or undefined and exactly the same 
+				if(x === y) {
+					return true;
+				}
+
+				// If they are not strictly equal, they both need to be Objects 
+				if(!(x instanceof Object) || !(y instanceof Object)) {
+					return false;
+				}
+
+				//They must have the exact same prototype chain,the closest we can do is
+				//test the constructor. 
+				if(x.constructor !== y.constructor) {
+					return false;
+				}
+
+				for(var p in x) {
+					//Inherited properties were tested using x.constructor === y.constructor
+					if(x.hasOwnProperty(p)) {
+						// Allows comparing x[ p ] and y[ p ] when set to undefined 
+						if(!y.hasOwnProperty(p)) {
+							return false;
+						}
+
+						// If they have the same strict value or identity then they are equal 
+						if(x[p] === y[p]) {
+							continue;
+						}
+
+						// Numbers, Strings, Functions, Booleans must be strictly equal 
+						if(typeof(x[p]) !== "object") {
+							return false;
+						}
+
+						// Objects and Arrays must be tested recursively 
+						if(!Object.equals(x[p], y[p])) {
+							return false;
+						}
+					}
+				}
+
+				for(p in y) {
+					// allows x[ p ] to be set to undefined 
+					if(y.hasOwnProperty(p) && !x.hasOwnProperty(p)) {
+						return false;
+					}
+				}
+				return true;
+			};
+
+			// we will use open street map as our base map
+			var mapLayer = new ol.layer.Tile({
+				source: new ol.source.OSM(),
+			});
+
+			// source to save the draw feature
+			var drawSource = new ol.source.Vector({
+				wrapX: false
+			});
+
+			// the layer to display draw
+			var drawLayer = new ol.layer.Vector({
+				source: drawSource,
+			});
+
+			var map = new ol.Map({
+				layers: [mapLayer, drawLayer],
+				target: 'map',
+				view: new ol.View({
+					center: [-11000000, 4600000],
+					zoom: 4
+				})
+			});
+
+			var typeSelect = document.getElementById('type');
+
+			var draw; // global so we can remove it later
+			function addInteraction() {
+				var value = typeSelect.value;
+				if(value !== 'None') {
+					// send drawSource to the interaction, so we can see it on the map
+					draw = new ol.interaction.Draw({
+						source: drawSource,
+						type: typeSelect.value
+					});
+					// we can listen on the drawend event where we can get the draw feature
+					draw.on('drawend', function(ev) {
+						if(isPolygonIntersects(ev.feature)) {
+							map.removeInteraction(draw);
+						} else {
+							toastr.error('Intersects');
+							// if you try to remove feature immediately after 'drawend', it won't work.
+							// so we can use timeout.
+							setTimeout(function() {
+								drawSource.removeFeature(ev.feature);
+							}, 100);
+						}
+					})
+					map.addInteraction(draw);
+				}
+			}
+
+			/**
+			 * Handle change event.
+			 */
+			typeSelect.onchange = function() {
+				map.removeInteraction(draw);
+				addInteraction();
+			};
+
+			addInteraction();
+		</script>
+	</body>
+
+</html>

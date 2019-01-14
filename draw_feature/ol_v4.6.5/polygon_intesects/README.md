@@ -11,7 +11,7 @@ We can use the following syntax:
             type: "Polygon",
             coordinates: [
             		[
-            			[lon1, lat1],
+            			   [lon1, lat1],
                         [lon2, lat2],
                         [lon3, lat3],
                         ...,
@@ -38,7 +38,7 @@ We can check it before we do the query, so we only send the valid query to Mongo
             type: "Polygon",
             coordinates: [
             		[
-            			[lon1, lat1],
+            			   [lon1, lat1],
                         [lon2, lat2],
                         [lon3, lat3],
                         ...,

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+		<title>Circle Radius</title>
+		<link rel="stylesheet" href="https://openlayers.org/en/v4.6.5/css/ol.css" type="text/css">
+		<!-- The line below is only needed for old environments like Internet Explorer and Android 4.x -->
+		<script src="https://cdn.polyfill.io/v2/polyfill.min.js?features=requestAnimationFrame,Element.prototype.classList,URL"></script>
+		<script src="https://openlayers.org/en/v4.6.5/build/ol.js"></script>
+		<script src="../../../js/turf/turf.min.js"></script>
+		<script src="../../../js/jquery/jquery.min.js"></script>
+		<link href="../../../js/toastr/toastr.min.css" rel="stylesheet">
+		<script src="../../../js/toastr/toastr.min.js"></script>
+	</head>
+
+	<body>
+		<form class="form-inline">
+			<label>Geometry type &nbsp;</label>
+			<select id="type">
+				<option value="Circle">Circle</option>
+				<option value="None">None</option>
+			</select>
+			<button type='button' id="clean">clean</button>
+		</form>
+		<span>In this page, we'll evaluate the radius of circle we drawed.</span>
+		<div id="map" class="map"></div>
+		<script>
+			function getDistance(lat1,  lng1,  lat2,  lng2){
+			    var radLat1 = lat1*Math.PI / 180.0;
+			    var radLat2 = lat2*Math.PI / 180.0;
+			    var a = radLat1 - radLat2;
+			    var  b = lng1*Math.PI / 180.0 - lng2*Math.PI / 180.0;
+			    var s = 2 * Math.asin(Math.sqrt(Math.pow(Math.sin(a/2),2) +
+			    Math.cos(radLat1)*Math.cos(radLat2)*Math.pow(Math.sin(b/2),2)));
+			    s = s *6378.137 ;// EARTH_RADIUS;
+			    s = Math.round(s * 10000) / 10000;
+			    return s;
+			}
+			// we will use open street map as our base map
+			var mapLayer = new ol.layer.Tile({
+				source: new ol.source.OSM(),
+			});
+
+			// source to save the draw feature
+			var drawSource = new ol.source.Vector({
+				wrapX: false
+			});
+
+			// the layer to display draw
+			var drawLayer = new ol.layer.Vector({
+				source: drawSource,
+			});
+
+			var map = new ol.Map({
+				layers: [mapLayer, drawLayer],
+				target: 'map',
+				view: new ol.View({
+					center: [-11000000, 4600000],
+					zoom: 4
+				})
+			});
+
+			var typeSelect = document.getElementById('type');
+			var clearBtn = document.getElementById('clean');
+
+			var circleCenter = [];
+			var radius = 0.0;
+			var openLayersRadius = 0.0;
+			var draw; // global so we can remove it later
+			function addInteraction() {
+				var value = typeSelect.value;
+				if(value !== 'None') {
+					// send drawSource to the interaction, so we can see it on the map
+					draw = new ol.interaction.Draw({
+						source: drawSource,
+						type: typeSelect.value
+					});
+					// we can listen on the drawend event where we can get the draw feature
+					draw.on('drawend', function(ev) {
+						circleCenter = ol.proj.transform(ev.feature.getGeometry().getCenter(), 'EPSG:3857', 'EPSG:4326');
+						openLayersRadius = ev.feature.getGeometry().getRadius();
+						setTimeout(function() {
+							var e = drawSource.getFeatures()[0].getGeometry().getExtent();
+							minxy = ol.proj.transform([e[0], e[1]], 'EPSG:3857', 'EPSG:4326');
+							maxxy = ol.proj.transform([e[2], e[3]], 'EPSG:3857', 'EPSG:4326');
+							radius = getDistance(minxy[1], minxy[0], maxxy[1], maxxy[0]) / Math.SQRT2 / 2;
+							
+							toastr.success('radius is:' + radius + '\n' 
+											+ 'openlayers radius is:' + parseFloat((openLayersRadius / 1000).toFixed(2)) + '\n' 
+											+ 'center is:' + circleCenter);
+						}, 10);
+						map.removeInteraction(draw);
+					})
+					map.addInteraction(draw);
+				}
+			}
+
+			/**
+			 * Handle change event.
+			 */
+			typeSelect.onchange = function() {
+				drawSource.clear();
+				map.removeInteraction(draw);
+				addInteraction();
+			};
+			
+			clearBtn.onclick = function() {
+				drawSource.clear();
+				map.removeInteraction(draw);
+				addInteraction();
+			}
+
+			addInteraction();
+		</script>
+	</body>
+
+</html>
